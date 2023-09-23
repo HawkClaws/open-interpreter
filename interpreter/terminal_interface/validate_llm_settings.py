@@ -46,6 +46,8 @@ def validate_llm_settings(interpreter):
                 break
         
         else:
+            if interpreter.model == "revChatGPT":
+                break
             # Ensure API keys are set as environment variables
 
             # OpenAI
