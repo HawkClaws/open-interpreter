@@ -21,9 +21,9 @@ def setup_revChatGPT_coding_llm(interpreter):
         accumulated_block = ""
         language = None
 
-        print("messages_data:" + str(messages))
+        # print("messages_data:" + str(messages))
         user_messages = [item["message"] for item in messages if item["role"] == "user"]
-        print("user_messages_data:" + str(user_messages))
+        # print("user_messages_data:" + str(user_messages))
         user_message = user_messages[-1]
 
         before_str_len = 0
@@ -44,7 +44,7 @@ def setup_revChatGPT_coding_llm(interpreter):
 
             # Did we just exit a code block?
             if inside_code_block and "```" in accumulated_block:
-                print("Did we just exit a code block? : "+ res_message)
+                # print("Did we just exit a code block? : "+ res_message)
                 return
 
             if inside_code_block and "`" in accumulated_block:
