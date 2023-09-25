@@ -1,10 +1,11 @@
-from interpreter.code_interpreters.create_code_interpreter import create_code_interpreter
-from interpreter.utils import display_markdown_message, get_user_info_string
+from ..code_interpreters.create_code_interpreter import create_code_interpreter
 from ..utils.merge_deltas import merge_deltas
 from ..utils.get_user_info_string import get_user_info_string
+from ..utils.display_markdown_message import display_markdown_message
 from ..rag.get_relevant_procedures import get_relevant_procedures
 from ..utils.truncate_output import truncate_output
 import traceback
+import litellm
 
 def respond(interpreter):
     """
@@ -52,7 +53,6 @@ def respond(interpreter):
         # Start putting chunks into the new message
         # + yielding chunks to the user
         try:
-
             for chunk in interpreter._llm(messages_for_llm):
 
                 # Add chunk to the last message
@@ -61,15 +61,24 @@ def respond(interpreter):
                 # This is a coding llm
                 # It will yield dict with either a message, language, or code (or language AND code)
                 yield chunk
+        except litellm.exceptions.BudgetExceededError:
+            display_markdown_message(f"""> Max budget exceeded
 
+                **Session spend:** ${litellm._current_cost}
+                **Max budget:** ${interpreter.max_budget}
+
+                Press CTRL-C then run `interpreter --max_budget [higher USD amount]` to proceed.
+            """)
+            break
         # Provide extra information on how to change API keys, if we encounter that error
         # (Many people writing GitHub issues were struggling with this)
         except Exception as e:
             if 'auth' in str(e).lower() or 'api key' in str(e).lower():
                 output = traceback.format_exc()
-                raise Exception(f"{output}\n\nThere might be an issue with your API key(s).\n\nTo reset your OPENAI_API_KEY (for example):\n        Mac/Linux: 'export OPENAI_API_KEY=your-key-here',\n        Windows: 'setx OPENAI_API_KEY=your-key-here' then restart terminal.\n\n")
+                raise Exception(f"{output}\n\nThere might be an issue with your API key(s).\n\nTo reset your OPENAI_API_KEY (for example):\n        Mac/Linux: 'export OPENAI_API_KEY=your-key-here',\n        Windows: 'setx OPENAI_API_KEY your-key-here' then restart terminal.\n\n")
             else:
-                raise e
+                raise
+        
         
         
         ### RUN CODE (if it's there) ###
@@ -96,7 +105,12 @@ def respond(interpreter):
                 code_interpreter = interpreter._code_interpreters[language]
 
                 # Yield a message, such that the user can stop code execution if they want to
-                yield {"executing": {"code": code, "language": language}}
+                try:
+                    yield {"executing": {"code": code, "language": language}}
+                except GeneratorExit:
+                    # The user might exit here.
+                    # We need to tell python what we (the generator) should do if they exit
+                    break
 
                 # Track if you've sent_output.
                 # If you never do, we'll send an empty string (to indicate that code has been run)
@@ -125,6 +139,8 @@ def respond(interpreter):
                 output = traceback.format_exc()
                 yield {"output": output.strip()}
                 interpreter.messages[-1]["output"] = output.strip()
+
+            yield {"end_of_execution": True}
 
         else:
             # Doesn't want to run code. We're done
