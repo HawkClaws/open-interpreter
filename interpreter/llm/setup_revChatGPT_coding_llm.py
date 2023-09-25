@@ -4,7 +4,9 @@ import tokentrim as tt
 from os import environ
 from ..utils.convert_to_openai_messages import convert_to_openai_messages
 # ChatGPTのアクセストークンの入力　詳細は https://github.com/acheong08/ChatGPT#--access-token を参照
-ACCESS_TOKEN =  environ.get('CHATGPT_ACCESS_TOKEN')
+ACCESS_TOKEN = environ.get('CHATGPT_ACCESS_TOKEN')
+IS_DELETE_CONVERSATION = environ.get('IS_DELETE_CONVERSATION', 'True').lower() == 'true'
+
 from revChatGPT.V1 import Chatbot
 
 CHAT_BOT = None
@@ -45,11 +47,13 @@ def setup_revChatGPT_coding_llm(interpreter):
         prompt = " ".join([message["content"] for message in messages])
         # print("user_messages_data:" + str(prompt))
 
+        conversation_id = None
         before_str_len = 0
         for data in CHAT_BOT.ask(prompt):
             # chunk['choices'][0]['delta'].get('content', "")
             content = ""
             res_message = data["message"]
+            conversation_id = data['conversation_id']
             # print("res_message:" + res_message)
             content = res_message[before_str_len:]
             before_str_len = len(res_message)
@@ -63,7 +67,8 @@ def setup_revChatGPT_coding_llm(interpreter):
 
             # Did we just exit a code block?
             if inside_code_block and "```" in accumulated_block:
-                # print("Did we just exit a code block? : "+ res_message)
+                if IS_DELETE_CONVERSATION:
+                    CHAT_BOT.delete_conversation(conversation_id)
                 return
 
             if inside_code_block and "`" in accumulated_block:
