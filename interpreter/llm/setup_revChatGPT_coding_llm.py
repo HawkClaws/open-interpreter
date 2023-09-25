@@ -1,33 +1,52 @@
 from .setup_text_llm import setup_text_llm
+import json
+import tokentrim as tt
+from os import environ
+from ..utils.convert_to_openai_messages import convert_to_openai_messages
+# ChatGPTのアクセストークンの入力　詳細は https://github.com/acheong08/ChatGPT#--access-token を参照
+ACCESS_TOKEN =  environ.get('CHATGPT_ACCESS_TOKEN')
+from revChatGPT.V1 import Chatbot
 
+CHAT_BOT = None
+if ACCESS_TOKEN != None:
+    CHAT_BOT = Chatbot(config={
+        "access_token": ACCESS_TOKEN,
+    })
 
 def setup_revChatGPT_coding_llm(interpreter):
     """
     Takes a text_llm
     returns a Coding LLM (a generator that streams deltas with `message`, 'language', and `code`).
     """
-    from os import environ
-    # ChatGPTのアクセストークンの入力　詳細は https://github.com/acheong08/ChatGPT#--access-token を参照
-    ACCESS_TOKEN =  environ['CHATGPT_ACCESS_TOKEN']
-    
-    from revChatGPT.V1 import Chatbot
-
-    chatbot = Chatbot(config={
-        "access_token": ACCESS_TOKEN,
-    })
 
     def coding_llm(messages):
+        if CHAT_BOT == None:
+            raise Exception("revChatGPT initialization failed. Do you have the token set in the environment variable CHATGPT_ACCESS_TOKEN?")
         inside_code_block = False
         accumulated_block = ""
         language = None
 
-        # print("messages_data:" + str(messages))
-        user_messages = [item["message"] for item in messages if item["role"] == "user"]
-        # print("user_messages_data:" + str(user_messages))
-        user_message = user_messages[-1]
+        # Convert messages
+        messages = convert_to_openai_messages(messages)
+
+        # Seperate out the system_message from messages
+        # (We expect the first message to always be a system_message)
+        system_message = messages[0]["content"]
+
+        # 謎の文字列を削除
+        system_message = system_message.replace('Testing\nOne Two three\n\n\n', '')
+        messages = messages[1:]
+
+        # Trim messages, preserving the system_message
+        messages = tt.trim(messages=messages, system_message=system_message,max_tokens=4096)
+
+        # print("messages_data:")
+        # print(json.dumps(messages, ensure_ascii=False))
+        prompt = " ".join([message["content"] for message in messages])
+        # print("user_messages_data:" + str(prompt))
 
         before_str_len = 0
-        for data in chatbot.ask(user_message):
+        for data in CHAT_BOT.ask(prompt):
             # chunk['choices'][0]['delta'].get('content', "")
             content = ""
             res_message = data["message"]
